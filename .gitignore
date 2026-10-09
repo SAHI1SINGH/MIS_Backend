@@ -1,0 +1,22 @@
+# Java compiled files
+*.class
+
+# Maven build output, including JAR files
+target/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Environment variables and logs
+.env
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Sensitive configuration files
+src/main/resources/application-dev.properties
+src/main/resources/application-prod.properties
+src/main/resources/firebase-service-account.json
