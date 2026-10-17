@@ -33,7 +33,7 @@ public class LeaveController {
 
     // ── Employee applies for leave ──────────────────────────────────────────
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','SUB_ADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUB_ADMIN','EMPLOYEE','INTERN')")
     public ResponseEntity<ApiResponse<LeaveResponseDTO>> apply(
             @RequestBody LeaveRequestDTO dto,
             Authentication authentication) {
@@ -137,7 +137,7 @@ public class LeaveController {
 
     // ── Employee cancels their own leave (only while PENDING) ────────────────
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUB_ADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUB_ADMIN','EMPLOYEE','INTERN')")
     public ResponseEntity<ApiResponse<Void>> cancel(
             @PathVariable String id,
             @RequestParam String employeeId

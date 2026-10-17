@@ -68,12 +68,18 @@ public class SecurityConfig {
                         .requestMatchers("/api/tasks/**").hasAnyRole("ADMIN", "SUB_ADMIN", "EMPLOYEE", "INTERN")
 
                         // ── Shared read-only content ──────────────────────────────────────
-                        .requestMatchers("/api/notices/**").hasAnyRole("ADMIN", "SUB_ADMIN", "EMPLOYEE")
-                        .requestMatchers("/api/highlights/**").hasAnyRole("ADMIN", "SUB_ADMIN", "EMPLOYEE")
-                        .requestMatchers("/api/quotes/**").hasAnyRole("ADMIN", "SUB_ADMIN", "EMPLOYEE")
-                        .requestMatchers("/api/leaves/**").hasAnyRole("ADMIN", "SUB_ADMIN", "EMPLOYEE")
-                        // ── Standup ───────────────────────────────────────────────────────
+                        .requestMatchers("/api/notices/**").hasAnyRole("ADMIN", "SUB_ADMIN", "INTERN","EMPLOYEE")
+                        .requestMatchers("/api/highlights/**").hasAnyRole("ADMIN", "SUB_ADMIN", "INTERN", "EMPLOYEE")
+                        .requestMatchers("/api/quotes/**").hasAnyRole("ADMIN", "SUB_ADMIN", "INTERN", "EMPLOYEE")
+                        .requestMatchers("/api/leaves/**").hasAnyRole("EMPLOYEE", "SUB_ADMIN", "INTERN", "ADMIN")
+                        .requestMatchers(
+                                "/api/standup/admin",
+                                "/api/standup/admin/**",
+                                "/api/standup/date/**"
+                        ).hasRole("ADMIN")
+                        // Incharge (employee side): submit, today, history, view one report
                         .requestMatchers("/api/standup/**").hasAnyRole("ADMIN", "SUB_ADMIN", "EMPLOYEE", "INTERN")
+
                         .requestMatchers("/api/attendance/**").hasAnyRole("ADMIN", "SUB_ADMIN", "EMPLOYEE", "INTERN")
 
                         // ── Store (component inventory) ──────────────────────────────────
@@ -99,7 +105,7 @@ public class SecurityConfig {
                 "https://tadobasolutions.com",
                 "*"
         ));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(false);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

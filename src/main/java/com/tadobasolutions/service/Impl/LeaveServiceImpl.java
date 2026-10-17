@@ -6,12 +6,14 @@ import com.tadobasolutions.dto.response.CurrentlyOnLeaveDTO;
 import com.tadobasolutions.dto.response.LeaveResponseDTO;
 import com.tadobasolutions.entity.Admin;
 import com.tadobasolutions.entity.Employee;
+import com.tadobasolutions.entity.Intern;
 import com.tadobasolutions.entity.Leave;
 import com.tadobasolutions.entity.enums.LeaveStatus;
 import com.tadobasolutions.exception.BadRequestException;
 import com.tadobasolutions.exception.ResourceNotFoundException;
 import com.tadobasolutions.repository.AdminRepository;
 import com.tadobasolutions.repository.EmployeeRepository;
+import com.tadobasolutions.repository.InternRepository;
 import com.tadobasolutions.repository.LeaveRepository;
 import com.tadobasolutions.service.LeaveService;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -34,12 +37,26 @@ public class LeaveServiceImpl implements LeaveService {
 
     private final LeaveRepository            leaveRepository;
     private final EmployeeRepository         employeeRepository;
+    private final InternRepository           internRepository;   // NEW
     private final AdminRepository            adminRepository;
     private final FcmNotificationService     fcmService;
     private final LeaveReminderSchedulerImpl leaveReminderScheduler;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
+
+    // Applicant can be an Employee/Sub-Admin or an Intern
+    private record Applicant(String id, String name) {}
+
+    private Applicant resolveApplicant(String email) {
+        Optional<Employee> emp = employeeRepository.findByEmail(email);
+        if (emp.isPresent()) {
+            return new Applicant(emp.get().getId(), emp.get().getName());
+        }
+        Intern intern = internRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+        return new Applicant(intern.getId(), intern.getName());
+    }
 
     // ─── Mapper ───────────────────────────────────────────────────────────────
 
@@ -69,8 +86,7 @@ public class LeaveServiceImpl implements LeaveService {
     @Override
     public LeaveResponseDTO applyLeave(String email, LeaveRequestDTO dto) {
 
-        Employee employee = employeeRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+        Applicant applicant = resolveApplicant(email);   // CHANGED
 
         if (dto.getFromDate() == null || dto.getToDate() == null) {
             throw new BadRequestException("fromDate and toDate are required");
@@ -82,8 +98,8 @@ public class LeaveServiceImpl implements LeaveService {
         int totalDays = (int) ChronoUnit.DAYS.between(dto.getFromDate(), dto.getToDate()) + 1;
 
         Leave leave = new Leave();
-        leave.setEmployeeId(employee.getId());
-        leave.setEmployeeName(employee.getName());
+        leave.setEmployeeId(applicant.id());
+        leave.setEmployeeName(applicant.name());
         leave.setLeaveType(dto.getLeaveType());
         leave.setFromDate(dto.getFromDate());
         leave.setToDate(dto.getToDate());
@@ -107,12 +123,12 @@ public class LeaveServiceImpl implements LeaveService {
             fcmService.sendToTokens(
                     adminTokens,
                     "🗓️ New Leave Request",
-                    employee.getName() + " applied for " + totalDays + " day(s) leave (" +
+                    applicant.name() + " applied for " + totalDays + " day(s) leave (" +
                             dto.getFromDate().format(DATE_FMT) + " to " + dto.getToDate().format(DATE_FMT) + ")",
                     Map.of(
                             "leaveId",      saved.getId(),
                             "type",         "LEAVE_APPLIED",
-                            "employeeName", employee.getName(),
+                            "employeeName", applicant.name(),
                             "totalDays",    String.valueOf(totalDays)
                     )
             );
@@ -143,7 +159,7 @@ public class LeaveServiceImpl implements LeaveService {
 
         Leave saved = leaveRepository.save(leave);
 
-        notifyEmployeeOfDecision(saved, dto.isApproved(), admin.getName());
+        notifyApplicantOfDecision(saved, dto.isApproved(), admin.getName());
 
         // ── If approved and already active today, broadcast to the org now ─────
         // (the daily scheduled job picks up every subsequent day automatically)
@@ -160,26 +176,31 @@ public class LeaveServiceImpl implements LeaveService {
         return mapToDTO(saved);
     }
 
-    private void notifyEmployeeOfDecision(Leave leave, boolean approved, String decidedByName) {
-        employeeRepository.findById(leave.getEmployeeId()).ifPresent(employee -> {
-            if (employee.getFcmTokens() == null || employee.getFcmTokens().isEmpty()) return;
+    private void notifyApplicantOfDecision(Leave leave, boolean approved, String decidedByName) {
+        // Applicant may be an employee or an intern
+        List<String> tokens = employeeRepository.findById(leave.getEmployeeId())
+                .map(Employee::getFcmTokens)
+                .orElseGet(() -> internRepository.findById(leave.getEmployeeId())
+                        .map(Intern::getFcmTokens)   // remove if Intern has no fcmTokens field
+                        .orElse(null));
 
-            String title = approved ? "✅ Leave Approved" : "❌ Leave Rejected";
-            String body  = approved
-                    ? "Your leave request for " + leave.getTotalDays() + " day(s) (" +
-                    leave.getFromDate().format(DATE_FMT) + " to " + leave.getToDate().format(DATE_FMT) + ") has been approved"
-                    : "Your leave request for " + leave.getTotalDays() + " day(s) was rejected by " + decidedByName;
+        if (tokens == null || tokens.isEmpty()) return;
 
-            fcmService.sendToTokens(
-                    employee.getFcmTokens(),
-                    title,
-                    body,
-                    Map.of(
-                            "leaveId", leave.getId(),
-                            "type",    approved ? "LEAVE_APPROVED" : "LEAVE_REJECTED"
-                    )
-            );
-        });
+        String title = approved ? "✅ Leave Approved" : "❌ Leave Rejected";
+        String body  = approved
+                ? "Your leave request for " + leave.getTotalDays() + " day(s) (" +
+                leave.getFromDate().format(DATE_FMT) + " to " + leave.getToDate().format(DATE_FMT) + ") has been approved"
+                : "Your leave request for " + leave.getTotalDays() + " day(s) was rejected by " + decidedByName;
+
+        fcmService.sendToTokens(
+                tokens,
+                title,
+                body,
+                Map.of(
+                        "leaveId", leave.getId(),
+                        "type",    approved ? "LEAVE_APPROVED" : "LEAVE_REJECTED"
+                )
+        );
     }
 
     // ─── Currently on leave (for dashboard) ────────────────────────────────────

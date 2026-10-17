@@ -5,26 +5,24 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface StandupLogRepository extends MongoRepository<StandupLog, String> {
 
-    // all entries by one employee on a specific date (multiple allowed)
-    List<StandupLog> findByEmployeeIdAndStandupDateOrderBySubmittedAtAsc(
-            String employeeId, LocalDate standupDate
-    );
+    // one report per department per day — duplicate check + "today" lookup
+    Optional<StandupLog> findByDepartmentIdAndStandupDate(String departmentId, LocalDate standupDate);
 
-    // all entries by one employee — full history, newest first
-    List<StandupLog> findByEmployeeIdOrderByStandupDateDescSubmittedAtDesc(
-            String employeeId
-    );
+    // incharge: own department history, newest first
+    List<StandupLog> findByDepartmentIdOrderByStandupDateDesc(String departmentId);
 
-    // all entries on a given date — admin sees everyone's work
-    List<StandupLog> findByStandupDateOrderByEmployeeIdAscSubmittedAtAsc(
-            LocalDate date
-    );
+    // admin: all departments on a date
+    List<StandupLog> findByStandupDateOrderByDepartmentNameAsc(LocalDate standupDate);
 
-    // count entries for an employee on a date — used for entryNumber
-    long countByEmployeeIdAndStandupDate(
-            String employeeId, LocalDate standupDate
-    );
+    // admin: one department on a date
+    List<StandupLog> findByStandupDateAndDepartmentIdOrderByDepartmentNameAsc(
+            LocalDate standupDate, String departmentId);
+
+    // admin: all departments in a date range — used for the Excel export
+    List<StandupLog> findByStandupDateBetweenOrderByStandupDateAscDepartmentNameAsc(
+            LocalDate from, LocalDate to);
 }
