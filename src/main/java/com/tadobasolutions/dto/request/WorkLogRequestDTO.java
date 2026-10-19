@@ -1,7 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// FILE: dto/request/WorkLogRequestDTO.java
-// Employee sends this from the Flutter EOD screen
-// ─────────────────────────────────────────────────────────────────────────────
+
 package com.tadobasolutions.dto.request;
 
 import lombok.Data;

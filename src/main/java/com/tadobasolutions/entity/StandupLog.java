@@ -12,7 +12,7 @@ import java.util.List;
 
 /**
  * End-of-Day Reporting: Work & Follow-Up Report.
- * One report per department per date.
+ * One report per EMPLOYEE per date (draft until submitted, then locked).
  */
 @Data
 @Document(collection = "standup_logs")
@@ -22,44 +22,48 @@ public class StandupLog {
     private String id;
 
     // ── Header: Date + Department ────────────────────────────────────────────
-    // Date: incharge -> always today (fixed by backend), admin -> optional
     @Indexed
     private LocalDate standupDate;
 
-    // Department: incharge -> own department (auto), admin -> dropdown
     @Indexed
     private String departmentId;
     private String departmentName;
 
     // ── Who filled it ────────────────────────────────────────────────────────
+    @Indexed
     private String submittedById;
     private String submittedByName;
     private boolean submittedByAdmin;
     private LocalDateTime submittedAt;
 
+    // ── Draft / lock state ───────────────────────────────────────────────────
+    // true  = auto-saved draft (editable)
+    // false = submitted & locked. Old documents have no such field -> false.
+    private boolean draft;
+    private LocalDateTime draftSavedAt;
+
     // ── Table (max 15 rows) ──────────────────────────────────────────────────
     private List<EodItem> items = new ArrayList<>();
 
     // ── End-of-Day Summary ───────────────────────────────────────────────────
-    private String keyAchievements;     // Key achievements today
-    private String challenges;          // Challenges / Issues faced
-    private String supportRequired;     // Support required from management
-    private String tomorrowPlan;        // Planned work for tomorrow
+    private String keyAchievements;
+    private String challenges;
+    private String supportRequired;
+    private String tomorrowPlan;
 
     // ── Admin remarks meta ───────────────────────────────────────────────────
     private String remarkedBy;
     private LocalDateTime remarkedAt;
-
+    private boolean autoSubmitted;
     // ── One row of the table ─────────────────────────────────────────────────
     @Data
     public static class EodItem {
-        private Integer srNo;               // S. No. (set by backend)
-        private String workParticulars;     // Work Particulars / Tasks
-        private String completedBy;         // Completed By
-        private String resultOrFollowUp;    // Results / Pending / Follow-Up
+        private Integer srNo;
+        private String workParticulars;
+        private String completedBy;
+        private String resultOrFollowUp;
 
-        // Remarks — filled by admin only.
-        // 0 = all 5 stars colorless, 4 = first 4 stars colored
+        // Remarks — filled by admin only. 0 = all 5 stars colorless
         private Integer rating = 0;
         private String remarkText;
     }
